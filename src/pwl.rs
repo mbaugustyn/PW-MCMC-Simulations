@@ -1,15 +1,8 @@
 use crate::hardcore;
 use rand::Rng;
+use statrs::statistics::MeanN;
+use statrs::statistics::Statistics;
 
-// if GRAPH_SIZE == 3 {
-//     expected_val = 1 as f64 / 63 as f64;
-// } else if GRAPH_SIZE == 4 {
-//     expected_val = 1 as f64 / 1234 as f64;
-// } else if GRAPH_SIZE == 5 {
-//     expected_val = 1 as f64 / 55447 as f64;
-// } else {
-//     return;
-// }
 pub fn hardcore_run<const GRAPH_SIZE: usize>(steps: usize) -> bool {
     let mut board;
     board = [[false; GRAPH_SIZE]; GRAPH_SIZE];
@@ -19,10 +12,6 @@ pub fn hardcore_run<const GRAPH_SIZE: usize>(steps: usize) -> bool {
         let b = rand::thread_rng().gen_range(0..GRAPH_SIZE);
         let coin_flip = rand::thread_rng().gen_range(0..2);
         hardcore::hardcore_update(a, b, coin_flip, &mut board);
-
-        if !hardcore::is_feasible::<GRAPH_SIZE>(&board) {
-            println!("COS NIE HALO");
-        }
     }
     return board == [[false; GRAPH_SIZE]; GRAPH_SIZE];
 }
@@ -35,42 +24,60 @@ pub fn hardcore_run_ntimes<const GRAPH_SIZE: usize>(steps: usize, tries: usize) 
     return sum as f64 / tries as f64;
 }
 
-pub fn hardcore_sample_var<const GRAPH_SIZE: usize>(M: usize) -> f64 {
-    let expected_val;
-    if GRAPH_SIZE == 3 {
-        expected_val = 1 as f64 / 63 as f64;
-    } else if GRAPH_SIZE == 4 {
-        expected_val = 1 as f64 / 1234 as f64;
-    } else if GRAPH_SIZE == 5 {
-        expected_val = 1 as f64 / 55447 as f64;
-    } else {
-        return -1.0;
-    }
-
-    let mut sum = 0.0;
+pub fn hardcore_sample_var<const GRAPH_SIZE: usize>(m: usize) -> (f64, f64) {
     let steps = 128;
-    for _ in 0..M {
+    let mut y: Vec<f64> = Vec::new();
+    for _ in 0..m {
         let result = hardcore_run::<GRAPH_SIZE>(steps);
-        if result {
-            sum += f64::powi(f64::abs(1.0 - expected_val), 2);
-        } else {
-            sum += f64::powi(f64::abs(0.0 - expected_val), 2);
-        }
+        let x = result as usize;
+        y.push(x as f64);
     }
-    return sum / (M as f64);
+    return (y.clone().variance(), y.clone().mean());
 }
 
-pub fn calculate_R(sample_var: f64) -> usize {
-    let ERROR = 0.01;
-    return ((1.96 * 1.96 * sample_var) / (ERROR * ERROR)) as usize;
+pub fn calculate_r(sample_var: f64, err: f64) -> usize {
+    return ((1.96 * 1.96 * sample_var) / (err * err)) as usize;
 }
 
-pub fn interval() -> f64 {
-    let S_m = 0.015664619299884355;
-    let R = calculate_R(S_m);
-    let S_R = hardcore_sample_var::<3>(R);
+pub fn interval<const GRAPH_SIZE: usize>(r: usize) -> (f64, f64) {
+    let (s_r, y_r) = hardcore_sample_var::<GRAPH_SIZE>(r);
+    let d = 1.96 * s_r.sqrt() / (r as f64).sqrt();
+    println!("sr = {}, yr = {}, d = {}", s_r, y_r, d);
+    return (y_r - d, y_r + d);
+}
 
-    println!("R = {}", R);
+pub fn pwl_test() -> f64 {
+    const ERR: f64 = 0.001;
+    const GRAPH_SIZE: usize = 3;
+    const STEPS: usize = 128;
+    const M: usize = 100000;
 
-    return 1.96 * S_R.sqrt() / (R as f64).sqrt();
+    let (s_m, _) = hardcore_sample_var::<GRAPH_SIZE>(M);
+    println!("s_m = {}", s_m);
+    let r: usize = calculate_r(s_m, ERR);
+    println!("R = {}", r);
+    let (left, right) = interval::<GRAPH_SIZE>(r);
+
+    let mut count_int = 0;
+    let mut count_b = 0;
+    let goes = 10000;
+    for go in 0..goes {
+        let result = hardcore_run_ntimes::<GRAPH_SIZE>(STEPS, r);
+        println!(
+            "count_int = {}, count_b = {}, #b = {}",
+            (count_int as f64 / go as f64),
+            (count_b as f64 / go as f64),
+            count_b
+        );
+        if result > left && result < right {
+            count_int += 1;
+        }
+        if (result - (1 as f64 / 63 as f64)).abs() < ERR {
+            count_b += 1;
+        }
+        // if go % 100 == 0 {
+        println!("Go = {}, result = {}", go, result);
+        // }
+    }
+    return count_int as f64 / goes as f64;
 }
