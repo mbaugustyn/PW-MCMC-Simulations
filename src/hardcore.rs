@@ -3,6 +3,17 @@ use std::vec;
 
 use crate::util;
 
+pub fn is_feasible<const GRAPH_SIZE: usize>(board: &[[bool; GRAPH_SIZE]; GRAPH_SIZE]) -> bool {
+    for i in 0..GRAPH_SIZE {
+        for j in 0..GRAPH_SIZE {
+            if board[i][j] == true && !are_neighbours_0(i, j, board) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 pub fn create_chessboard<const GRAPH_SIZE: usize>(board: &mut [[bool; GRAPH_SIZE]; GRAPH_SIZE]) {
     for i in 0..GRAPH_SIZE {
         for j in 0..GRAPH_SIZE {
@@ -56,17 +67,6 @@ pub fn are_neighbours_0<const GRAPH_SIZE: usize>(
     return true;
 }
 
-pub fn is_feasible<const GRAPH_SIZE: usize>(board: &[[bool; GRAPH_SIZE]; GRAPH_SIZE]) -> bool {
-    for i in 0..GRAPH_SIZE {
-        for j in 0..GRAPH_SIZE {
-            if board[i][j] == true && !are_neighbours_0(i, j, board) {
-                return false;
-            }
-        }
-    }
-    return true;
-}
-
 pub fn hardcore_update<const GRAPH_SIZE: usize>(
     a: usize,
     b: usize,
@@ -80,124 +80,98 @@ pub fn hardcore_update<const GRAPH_SIZE: usize>(
     }
 }
 
-pub fn simulate_hardcore<const GRAPH_SIZE: usize>(goes: usize, tries: usize, steps: usize) {
-    println!(
-        "\nHardcore for goes = {}, tries = {}, steps = {}",
-        goes, tries, steps
-    );
-    let mut board;
-    let mut blad = vec![];
-    let expected_val;
-    if GRAPH_SIZE == 3 {
-        expected_val = 1 as f64 / 63 as f64;
-    } else if GRAPH_SIZE == 4 {
-        expected_val = 1 as f64 / 1234 as f64;
-    } else if GRAPH_SIZE == 5 {
-        expected_val = 1 as f64 / 55447 as f64;
-    } else {
-        return;
+pub fn hardcore_try<const GRAPH_SIZE: usize>(steps: usize) -> bool {
+    let mut board = [[false; GRAPH_SIZE]; GRAPH_SIZE];
+    for _step in 0..steps {
+        let a = rand::thread_rng().gen_range(0..GRAPH_SIZE);
+        let b = rand::thread_rng().gen_range(0..GRAPH_SIZE);
+        let coin_flip = rand::thread_rng().gen_range(0..2);
+        hardcore_update(a, b, coin_flip, &mut board);
     }
-    for _go in 0..goes {
-        let mut counter = 0;
-        for _try in 0..tries {
-            board = [[false; GRAPH_SIZE]; GRAPH_SIZE];
-
-            for _step in 0..steps {
-                let a = rand::thread_rng().gen_range(0..GRAPH_SIZE);
-                let b = rand::thread_rng().gen_range(0..GRAPH_SIZE);
-                let coin_flip = rand::thread_rng().gen_range(0..2);
-                hardcore_update(a, b, coin_flip, &mut board);
-
-                if !is_feasible::<GRAPH_SIZE>(&board) {
-                    println!("COS NIE HALO");
-                }
-            }
-            if board == [[false; GRAPH_SIZE]; GRAPH_SIZE] {
-                counter += 1;
-            }
-        }
-        let wynik = counter as f64 / tries as f64;
-        // println!("Wynik = {}", wynik);
-        blad.push(util::absolute_error(wynik, expected_val));
-    }
-    println!("Srednia Bledow  = {}", util::averagef64(&blad));
-    println!(
-        "Srednia Bledow wzgledna  = {}",
-        util::averagef64(&blad) / expected_val
-    );
+    return board == [[false; GRAPH_SIZE]; GRAPH_SIZE];
 }
 
-fn propp_wilson_hardcore<const GRAPH_SIZE: usize>(goes: usize, tries: usize) {
-    let mut steps = vec![];
-    let mut blad = vec![];
+pub fn hardcore_tries<const GRAPH_SIZE: usize>(steps: usize, tries: usize) -> usize {
+    let mut sum = 0;
+    for _ in 0..tries {
+        sum += hardcore_try::<GRAPH_SIZE>(steps) as usize;
+    }
+    return sum;
+}
+
+pub fn hardcore_go<const GRAPH_SIZE: usize>(steps: usize, tries: usize) -> (f64, f64) {
+    let sum = hardcore_tries::<GRAPH_SIZE>(steps, tries);
+    let mean = sum as f64 / tries as f64;
+    let a = sum as f64 * (1.0 - mean).powi(2);
+    let b = (tries - sum) as f64 * (0.0 - mean).powi(2);
+    let var = (a + b) / (tries - 1) as f64;
+    return (mean, var);
+}
+
+pub fn real_mean<const GRAPH_SIZE: usize>() -> f64 {
     let expected_val;
     if GRAPH_SIZE == 3 {
-        expected_val = 1 as f64 / 63 as f64;
+        expected_val = 1.0 / 63.0;
     } else if GRAPH_SIZE == 4 {
-        expected_val = 1 as f64 / 1234 as f64;
+        expected_val = 1.0 / 1234.0;
     } else if GRAPH_SIZE == 5 {
-        expected_val = 1 as f64 / 55447 as f64;
+        expected_val = 1.0 / 55447.0;
+    } else {
+        expected_val = -1.0;
+    }
+    return expected_val;
+}
+
+pub fn hardcore_goes<const GRAPH_SIZE: usize>(
+    goes: usize,
+    tries: usize,
+    steps: usize,
+) -> (f64, f64) {
+    println!("Go for tries = {}, steps = {}", tries, steps);
+    let expected_val = real_mean::<GRAPH_SIZE>();
+    let mut errors: Vec<f64> = vec![];
+    for _ in 0..goes {
+        let (mean, _) = hardcore_go::<GRAPH_SIZE>(steps, tries);
+        println!("Result = {}", mean);
+        errors.push((mean - expected_val).abs());
+    }
+    let average_abs_error = util::averagef64(&errors);
+    return (average_abs_error, average_abs_error / expected_val);
+}
+
+pub fn hardcore_simulations_graphsize<const GRAPH_SIZE: usize>(goes: usize) {
+    println!("Simulation for GRAPH_SIZE = {}", GRAPH_SIZE);
+    let tries;
+    let steps;
+    if GRAPH_SIZE == 3 {
+        steps = [1024, 64, 128, 256, 512];
+        tries = [10000, 100000, 1000000];
+    } else if GRAPH_SIZE == 4 {
+        steps = [64, 128, 256, 512, 1024];
+        tries = [10000, 100000, 1000000];
+    } else if GRAPH_SIZE == 5 {
+        steps = [128, 256, 512, 1024, 2048];
+        tries = [10000000, 1000000, 1];
     } else {
         return;
     }
-    let mut max_m;
-
-    for _go in 0..goes {
-        let mut counter = 0;
-        max_m = 0;
-
-        for _try in 0..tries {
-            let mut m = 1;
-
-            let mut chessboard_config = [[false; GRAPH_SIZE]; GRAPH_SIZE];
-            create_chessboard(&mut chessboard_config);
-            let mut zeros_config = [[false; GRAPH_SIZE]; GRAPH_SIZE];
-
-            let mut update_function = vec![];
-
-            while chessboard_config != zeros_config {
-                zeros_config = [[false; GRAPH_SIZE]; GRAPH_SIZE];
-                chessboard_config = [[false; GRAPH_SIZE]; GRAPH_SIZE];
-                create_chessboard::<GRAPH_SIZE>(&mut chessboard_config);
-
-                for _ in 0..i32::pow(2, m) {
-                    let a = rand::thread_rng().gen_range(0..GRAPH_SIZE);
-                    let b = rand::thread_rng().gen_range(0..GRAPH_SIZE);
-                    let coin_flip = rand::thread_rng().gen_range(0..2);
-                    update_function.push((a, b, coin_flip));
-                }
-                for t in (0..i32::pow(2, m)).rev() {
-                    let (a, b, coin_flip) = update_function[t as usize];
-                    hardcore_update(a, b, coin_flip, &mut zeros_config);
-                    hardcore_update(a, b, coin_flip, &mut chessboard_config);
-
-                    if !is_feasible::<GRAPH_SIZE>(&zeros_config)
-                        || !is_feasible::<GRAPH_SIZE>(&chessboard_config)
-                    {
-                        println!("COS NIE HALO");
-                    }
-                }
-                m += 1;
-            }
-            if zeros_config == [[false; GRAPH_SIZE]; GRAPH_SIZE] {
-                counter += 1;
-            }
-            if m > max_m {
-                max_m = m;
-            }
-            steps.push(m);
+    for tr in tries {
+        for step in steps {
+            let (error_avg, err_rel) = hardcore_goes::<GRAPH_SIZE>(goes, tr, step);
+            println!("Error avg = {}, err_rel = {}", error_avg, err_rel);
         }
-        let wynik = counter as f64 / tries as f64;
-        println!("\n== Podejscie {} == ", _go + 1);
-        println!("Wynik = {}", wynik);
-        println!("Najwieksze m = {}", max_m);
-        blad.push(util::absolute_error(wynik, expected_val));
     }
+}
 
-    println!("Srednia krokow = {}", util::averageu32(&steps));
-    println!("Srednia Bledow  = {}", util::averagef64(&blad));
-    println!(
-        "Srednia Bledow wzgledna  = {}",
-        util::averagef64(&blad) / expected_val
-    );
+pub fn hardcore_simulations() {
+    const GOES: usize = 5;
+    hardcore_simulations_graphsize::<5>(GOES);
+    // hardcore_simulations_graphsize::<4>(GOES);
+    // hardcore_simulations_graphsize::<5>(GOES);
+}
+
+pub fn hardcore_feasible_combs<const GRAPH_SIZE: usize>() -> Vec<Vec<bool>> {
+    let result: Vec<Vec<bool>> = vec![];
+
+    return result;
 }
