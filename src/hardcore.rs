@@ -27,16 +27,6 @@ pub fn create_chessboard<const GRAPH_SIZE: usize>(board: &mut [[bool; GRAPH_SIZE
     }
 }
 
-pub fn print_board<const GRAPH_SIZE: usize>(board: &[[u32; GRAPH_SIZE]; GRAPH_SIZE]) {
-    println!("Board:");
-    for i in 0..GRAPH_SIZE {
-        for j in 0..GRAPH_SIZE {
-            print!("{} ", board[i][j]);
-        }
-        println!("");
-    }
-}
-
 pub fn print_board2<const GRAPH_SIZE: usize>(board: &[[bool; GRAPH_SIZE]; GRAPH_SIZE]) {
     println!("Board:");
     for i in 0..GRAPH_SIZE {
@@ -122,6 +112,10 @@ pub fn real_mean<const GRAPH_SIZE: usize>() -> f64 {
     return expected_val;
 }
 
+pub fn hardcore_error<const GRAPH_SIZE: usize>(result: f64) -> f64 {
+    return (result - real_mean::<GRAPH_SIZE>()).abs();
+}
+
 pub fn hardcore_goes<const GRAPH_SIZE: usize>(
     goes: usize,
     tries: usize,
@@ -139,19 +133,19 @@ pub fn hardcore_goes<const GRAPH_SIZE: usize>(
     return (average_abs_error, average_abs_error / expected_val);
 }
 
-pub fn hardcore_simulations_graphsize<const GRAPH_SIZE: usize>(goes: usize) {
+pub fn hardcore_simulations<const GRAPH_SIZE: usize>(goes: usize) {
     println!("Simulation for GRAPH_SIZE = {}", GRAPH_SIZE);
     let tries;
     let steps;
     if GRAPH_SIZE == 3 {
         steps = [1024, 64, 128, 256, 512];
-        tries = [10000, 100000, 1000000];
+        tries = [1000000, 10000, 100000];
     } else if GRAPH_SIZE == 4 {
         steps = [64, 128, 256, 512, 1024];
         tries = [10000, 100000, 1000000];
     } else if GRAPH_SIZE == 5 {
         steps = [128, 256, 512, 1024, 2048];
-        tries = [10000000, 1000000, 1];
+        tries = [10000000, 0, 0];
     } else {
         return;
     }
@@ -161,17 +155,4 @@ pub fn hardcore_simulations_graphsize<const GRAPH_SIZE: usize>(goes: usize) {
             println!("Error avg = {}, err_rel = {}", error_avg, err_rel);
         }
     }
-}
-
-pub fn hardcore_simulations() {
-    const GOES: usize = 5;
-    hardcore_simulations_graphsize::<5>(GOES);
-    // hardcore_simulations_graphsize::<4>(GOES);
-    // hardcore_simulations_graphsize::<5>(GOES);
-}
-
-pub fn hardcore_feasible_combs<const GRAPH_SIZE: usize>() -> Vec<Vec<bool>> {
-    let result: Vec<Vec<bool>> = vec![];
-
-    return result;
 }

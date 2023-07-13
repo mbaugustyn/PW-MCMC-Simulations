@@ -1,5 +1,3 @@
-use crate::hardcore;
-
 fn clear_mat<const GRAPH_SIZE: usize>(
     x: usize,
     y: usize,
